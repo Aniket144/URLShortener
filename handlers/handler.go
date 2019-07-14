@@ -14,7 +14,7 @@ import (
 var siteDomain = "localhost:8080"
 
 /* Setting Database credentials */
-var databaseName = "URLShortner"
+var databaseName = "URLShortener"
 var username = "root"
 var password = "root"
 var address = "127.0.0.1:3306"
@@ -52,7 +52,7 @@ func CreateShortLink(c *gin.Context) {
 
 	/* Rendering Successful Creation Page OR Already Exist*/
 	c.HTML(http.StatusOK, "posting.tmpl", gin.H{
-		"title":   "URLShortner Page",
+		"title":   "URLShortener Page",
 		"message": message,
 		"link":    shortLink,
 	})

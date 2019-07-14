@@ -1,7 +1,7 @@
 package main
 
 import (
-	controller "URLShortner/handlers"
+	controller "URLShortener/handlers"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
