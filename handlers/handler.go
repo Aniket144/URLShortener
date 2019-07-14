@@ -10,6 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+/* Setting Default Domain Name */
+var siteDomain = "localhost:8080"
+
+/* Setting Database credentials */
+var databaseName = "URLShortner"
+var username = "root"
+var password = "root"
+var address = "127.0.0.1:3306"
+var databaseSource = username + ":" + password + "@" + "tcp(" + address + ")/" + databaseName
+
 /* Home Page */
 func Home(c *gin.Context) {
 	c.HTML(http.StatusOK, "home.tmpl", gin.H{
@@ -21,7 +31,7 @@ func Home(c *gin.Context) {
 /* Checks whether a short link exists else create it */
 func CreateShortLink(c *gin.Context) {
 	/* Connecting to Database */
-	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/URLShortner")
+	db, err := sql.Open("mysql", databaseSource)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -53,7 +63,7 @@ func ShortLinkRedirect(c *gin.Context) {
 	hash := c.Params.ByName("hash")
 
 	/* Connecting to Database */
-	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/URLShortner")
+	db, err := sql.Open("mysql", databaseSource)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -110,7 +120,7 @@ func generateHash(link string) string {
 
 /* Get the shirt link of the by searching in DB using hash as key */
 func getShortLink(db *sql.DB, hash string, link string) (string, bool) {
-	shortLink := "localhost:8080/h/" + hash
+	shortLink := siteDomain + "/h/" + hash
 	_, alreadyExist, _ := getLongLink(db, hash)
 	if alreadyExist {
 		return shortLink, true
