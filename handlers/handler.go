@@ -74,9 +74,9 @@ func ShortLinkRedirect(c *gin.Context) {
 
 	if found {
 		increaseHits(db, hash, hits)
-		c.Redirect(http.StatusMovedPermanently, "http://"+originalLink)
+		c.Redirect(http.StatusFound, "http://"+originalLink)
 	} else {
-		c.Redirect(301, "/")
+		c.Redirect(http.StatusFound, "/")
 	}
 }
 
@@ -132,5 +132,3 @@ func getShortLink(db *sql.DB, hash string, link string) (string, bool) {
 	}
 	return shortLink, false
 }
-
-
