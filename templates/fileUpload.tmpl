@@ -8,18 +8,15 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 </head>
 <body>
-    <br>
-    <div class="container">
-        <h2> {{ .message }} </h2>
-        <form method="POST">
-            <label for="url">Enter URL</label>
-            <input type="text" name="url" required><br>
-            <input type="submit"><br>
-        </form>
+<br>
+<div class="container">
+    <h2> Upload your json file with URLS</h2>
+    <form method="POST" enctype="multipart/form-data" >
         <br>
-        OR
+        <input type="file" name="file" accept=".json">
         <br><br>
-        <a href="/file"> Upload a File Instead</a>
-    </div>
+        <input type="submit">
+    </form>
+</div>
 </body>
 </html>

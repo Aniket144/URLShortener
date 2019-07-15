@@ -4,8 +4,17 @@ import (
 	"URLShortener/migrations"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
+
+	//"encoding/json"
+	"io/ioutil"
+	"os"
+
+	//"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	//"log"
 	"net/http"
 )
 
@@ -33,6 +42,76 @@ func Home(c *gin.Context) {
 		"title":   "Home Page",
 		"message": "Get your URL Shorten Here",
 	})
+}
+
+func FileUpload(c *gin.Context) {
+	c.HTML(http.StatusOK, "fileUpload.tmpl", gin.H{
+		"title": "Upload URL File",
+	})
+}
+
+func FileParsing(c *gin.Context) {
+	//parseJSONFile("326084404.json")
+	//return
+	r := c.Request
+	r.ParseMultipartForm(10 << 20)
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+
+	fmt.Println("file name => ", handler.Filename)
+
+	tempFile, err := ioutil.TempFile("saved", "*.json")
+	//fmt.Println(tempFile.Name())
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer tempFile.Close()
+
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	tempFile.Write(fileBytes)
+	fmt.Println("Done", tempFile.Name())
+
+	parseJSONFile(tempFile.Name())
+}
+
+type URLS[] string
+
+func parseJSONFile(fileName string) {
+	path := fileName
+	jsonFile, err := os.Open(path)
+	if err != nil {
+		fmt.Println(jsonFile)
+	}
+	byteValue, _ := ioutil.ReadAll(jsonFile)
+	var fileURLs URLS
+	err = json.Unmarshal([]byte(byteValue), &fileURLs)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for _, url := range fileURLs {
+		createShortLink2(url)
+	}
+}
+
+func createShortLink2(url string)  {
+	/* Connecting to Database */
+	db, err := gorm.Open("mysql", databaseSource)
+	if err != nil {
+		println(err)
+		return
+	}
+	hash := generateHash(url)
+	getShortLink(db, hash, url)
 }
 
 /* Checks whether a short link exists else create it */
@@ -74,12 +153,11 @@ func ShortLinkRedirect(c *gin.Context) {
 	if err != nil {
 		println(err)
 	}
-	defer db.Close()
 
 	originalLink, found, hits := getLongLink(db, hash)
 
 	if found {
-		increaseHits(db, hash, hits)
+		go increaseHits(db, hash, hits)
 		c.Redirect(http.StatusFound, "http://"+originalLink)
 	} else {
 		c.Redirect(http.StatusFound, "/")
@@ -97,6 +175,7 @@ func increaseHits(db *gorm.DB, hash string, originalHits int) {
 	}
 	link.Hits = originalHits + 1
 	db.Save(&link)
+	db.Close()
 }
 
 /* Retrieve the Long URL by matching the Hash */
