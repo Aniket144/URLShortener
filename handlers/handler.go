@@ -1,14 +1,19 @@
 package handlers
 
 import (
+	"URLShortener/migrations"
 	"crypto/md5"
-	"database/sql"
 	"encoding/hex"
-	"fmt"
-	"net/http"
-	"strconv"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	"net/http"
 )
+
+type Link struct {
+	hash string
+	URL string
+	hits int
+}
 
 /* Setting Default Domain Name */
 var siteDomain = "localhost:8080"
@@ -18,7 +23,9 @@ var databaseName = "URLShortener"
 var username = "root"
 var password = "root"
 var address = "127.0.0.1:3306"
-var databaseSource = username + ":" + password + "@" + "tcp(" + address + ")/" + databaseName
+//var databaseSource = username + ":" + password + "@" + "tcp(" + address + ")/" + databaseName
+var databaseSource = username + ":" + password + "@/" + databaseName + "?charset=utf8&parseTime=True&loc=Local"
+
 
 /* Home Page */
 func Home(c *gin.Context) {
@@ -31,21 +38,21 @@ func Home(c *gin.Context) {
 /* Checks whether a short link exists else create it */
 func CreateShortLink(c *gin.Context) {
 	/* Connecting to Database */
-	db, err := sql.Open("mysql", databaseSource)
+	db, err := gorm.Open("mysql", databaseSource)
+	defer db.Close()
 	if err != nil {
-		fmt.Println(err)
+		println(err)
 		return
 	}
-	defer db.Close()
 
-	link := c.PostForm("link")
-	hash := generateHash(link)
+	url := c.PostForm("url")
+	hash := generateHash(url)
 
 	/* Default Message */
 	message := "Successfully Generated"
 
-	/* Check whether the Link already has a short link */
-	shortLink, alreadyExist := getShortLink(db, hash, link)
+	/* Check whether the url already has a short link */
+	shortLink, alreadyExist := getShortLink(db, hash, url)
 	if alreadyExist {
 		message = "The Short Link Already Exist"
 	}
@@ -63,10 +70,9 @@ func ShortLinkRedirect(c *gin.Context) {
 	hash := c.Params.ByName("hash")
 
 	/* Connecting to Database */
-	db, err := sql.Open("mysql", databaseSource)
+	db, err := gorm.Open("mysql", databaseSource)
 	if err != nil {
-		fmt.Println(err)
-		return
+		println(err)
 	}
 	defer db.Close()
 
@@ -81,34 +87,28 @@ func ShortLinkRedirect(c *gin.Context) {
 }
 
 /* To increase the count of hits a short URL receives */
-func increaseHits(db *sql.DB, hash string, originalHits int) {
-	query := "UPDATE links SET Hits = " + strconv.Itoa(originalHits+1) + " WHERE Hash = '" + hash + "';"
-	_, err := db.Query(query)
-	if err != nil {
-		fmt.Println(err)
+func increaseHits(db *gorm.DB, hash string, originalHits int) {
+	var link migrations.Link
+	db.Where("hash = ?", hash).First(&link)
+
+	/* If there's no retrieval */
+	if len(link.URL) == 0 {
+		return
 	}
+	link.Hits = originalHits + 1
+	db.Save(&link)
 }
 
 /* Retrieve the Long URL by matching the Hash */
-func getLongLink(db *sql.DB, hash string) (string, bool, int) {
-	query := "SELECT * FROM links WHERE Hash = '" + hash + "'"
-	res, err := db.Query(query)
-	defer res.Close()
-
-	var retrivedHash string
-	var retrivedLink string
-	var retrivedHits int
-
-	/* If there's an error or no rows returned */
-	if err != nil {
-		return "", false, 0
-	}
-	if !res.Next() {
+func getLongLink(db *gorm.DB, hash string) (string, bool, int) {
+	var link migrations.Link
+	db.Where("hash = ?", hash).First(&link)
+	/* IF there's no retrieval */
+	if len(link.URL) == 0 {
 		return "", false, 0
 	}
 
-	res.Scan(&retrivedHash, &retrivedLink, &retrivedHits)
-	return retrivedLink, true, retrivedHits
+	return  link.URL, true, link.Hits
 }
 
 /* Generate Hash of the Long URL using md5 algorithm */
@@ -119,16 +119,12 @@ func generateHash(link string) string {
 }
 
 /* Get the shirt link of the by searching in DB using hash as key */
-func getShortLink(db *sql.DB, hash string, link string) (string, bool) {
+func getShortLink(db *gorm.DB, hash string, url string) (string, bool) {
 	shortLink := siteDomain + "/h/" + hash
 	_, alreadyExist, _ := getLongLink(db, hash)
 	if alreadyExist {
 		return shortLink, true
 	}
-	query := "INSERT INTO links VALUES ('" + hash + "','" + link + "', " + strconv.Itoa(0) + ");"
-	_, err := db.Query(query)
-	if err != nil {
-		fmt.Println(err)
-	}
+	db.Create(&migrations.Link{Hash:hash, URL:url, Hits: 0})
 	return shortLink, false
 }
