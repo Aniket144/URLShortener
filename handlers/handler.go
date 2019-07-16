@@ -5,17 +5,13 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-
-	//"encoding/json"
 	"io/ioutil"
 	"os"
-
-	//"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	//"log"
 	"net/http"
+	"sync"
 )
 
 type Link struct {
@@ -23,6 +19,10 @@ type Link struct {
 	URL string
 	hits int
 }
+
+/* For retrieving URLs through JSON */
+type URLS[] string
+
 
 /* Setting Default Domain Name */
 var siteDomain = "localhost:8080"
@@ -44,15 +44,15 @@ func Home(c *gin.Context) {
 	})
 }
 
+/* File Upload Page */
 func FileUpload(c *gin.Context) {
 	c.HTML(http.StatusOK, "fileUpload.tmpl", gin.H{
 		"title": "Upload URL File",
 	})
 }
 
+/* File Parsing */
 func FileParsing(c *gin.Context) {
-	//parseJSONFile("326084404.json")
-	//return
 	r := c.Request
 	r.ParseMultipartForm(10 << 20)
 
@@ -83,8 +83,6 @@ func FileParsing(c *gin.Context) {
 	parseJSONFile(tempFile.Name())
 }
 
-type URLS[] string
-
 func parseJSONFile(fileName string) {
 	path := fileName
 	jsonFile, err := os.Open(path)
@@ -98,12 +96,15 @@ func parseJSONFile(fileName string) {
 		fmt.Println(err)
 	}
 
+	var wg sync.WaitGroup
 	for _, url := range fileURLs {
-		createShortLink2(url)
+		wg.Add(1)
+		go createShortLink(url, &wg)
 	}
+	wg.Wait()
 }
 
-func createShortLink2(url string)  {
+func createShortLink(url string, wg *sync.WaitGroup)  {
 	/* Connecting to Database */
 	db, err := gorm.Open("mysql", databaseSource)
 	if err != nil {
@@ -111,7 +112,8 @@ func createShortLink2(url string)  {
 		return
 	}
 	hash := generateHash(url)
-	getShortLink(db, hash, url)
+	getElseCreateShortLink(db, hash, url)
+	wg.Done()
 }
 
 /* Checks whether a short link exists else create it */
@@ -131,7 +133,7 @@ func CreateShortLink(c *gin.Context) {
 	message := "Successfully Generated"
 
 	/* Check whether the url already has a short link */
-	shortLink, alreadyExist := getShortLink(db, hash, url)
+	shortLink, alreadyExist := getElseCreateShortLink(db, hash, url)
 	if alreadyExist {
 		message = "The Short Link Already Exist"
 	}
@@ -198,7 +200,7 @@ func generateHash(link string) string {
 }
 
 /* Get the shirt link of the by searching in DB using hash as key */
-func getShortLink(db *gorm.DB, hash string, url string) (string, bool) {
+func getElseCreateShortLink(db *gorm.DB, hash string, url string) (string, bool) {
 	shortLink := siteDomain + "/h/" + hash
 	_, alreadyExist, _ := getLongLink(db, hash)
 	if alreadyExist {
