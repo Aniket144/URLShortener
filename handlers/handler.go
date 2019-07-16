@@ -98,24 +98,27 @@ func parseJSONFile(fileName string) {
 		fmt.Println(err)
 	}
 
-	var wg sync.WaitGroup
-	for _, url := range fileURLs {
-		wg.Add(1)
-		go createShortLink(url, &wg)
-	}
-	wg.Wait()
+	createShortLinks(fileURLs)
 }
 
-func createShortLink(url string, wg *sync.WaitGroup)  {
+func createShortLinks(Urls []string) {
 	/* Connecting to Database */
 	db, err := gorm.Open("mysql", databaseSource)
 	if err != nil {
 		println(err)
 		return
 	}
-	hash := generateHash(url)
-	getElseCreateShortLink(db, hash, url)
-	wg.Done()
+	defer db.Close()
+	var wg sync.WaitGroup
+	for _, url := range Urls {
+		wg.Add(1)
+		go func(temp_url string) {
+			hash := generateHash(temp_url)
+			getElseCreateShortLink(db, hash, temp_url)
+			wg.Done()
+		}(url)
+	}
+	wg.Wait()
 }
 
 /* Checks whether a short link exists else create it */
