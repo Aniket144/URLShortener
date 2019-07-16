@@ -81,6 +81,8 @@ func FileParsing(c *gin.Context) {
 	fmt.Println("Done", tempFile.Name())
 
 	parseJSONFile(tempFile.Name())
+
+	c.String(http.StatusOK, "File Uploaded Successfully")
 }
 
 func parseJSONFile(fileName string) {
