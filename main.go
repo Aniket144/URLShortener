@@ -10,7 +10,6 @@ import (
 
 func main() {
 	router := gin.Default()
-
 	/* Loading HTML Templates Folder */
 	router.LoadHTMLGlob("templates/*")
 
@@ -23,6 +22,7 @@ func main() {
 		//}
 		//db.AutoMigrate(&migrations.Link{})
 
+
 	///* Routes */
 	router.GET("/", controller.Home)
 	router.POST("/", controller.CreateShortLink)
@@ -32,4 +32,5 @@ func main() {
 
 	/* Server running at default Port 8080 */
 	router.Run()
+	defer controller.DB.Close()
 }

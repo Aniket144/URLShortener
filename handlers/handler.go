@@ -5,13 +5,14 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
-	"os"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Link struct {
@@ -35,6 +36,14 @@ var address = "127.0.0.1:3306"
 //var databaseSource = username + ":" + password + "@" + "tcp(" + address + ")/" + databaseName
 var databaseSource = username + ":" + password + "@/" + databaseName + "?charset=utf8&parseTime=True&loc=Local"
 
+
+var DB *gorm.DB
+
+func init() {
+	fmt.Println("Here")
+	DB, _ = gorm.Open("mysql", "root:root@/URLShortener?charset=utf8&parseTime=True&loc=Local")
+	fmt.Println(DB)
+}
 
 /* Home Page */
 func Home(c *gin.Context) {
@@ -102,35 +111,23 @@ func parseJSONFile(fileName string) {
 }
 
 func createShortLinks(Urls []string) {
-	/* Connecting to Database */
-	db, err := gorm.Open("mysql", databaseSource)
-	if err != nil {
-		println(err)
-		return
-	}
-	defer db.Close()
 	var wg sync.WaitGroup
 	for _, url := range Urls {
 		wg.Add(1)
 		go func(temp_url string) {
 			hash := generateHash(temp_url)
-			getElseCreateShortLink(db, hash, temp_url)
+			getElseCreateShortLink(hash, temp_url)
 			wg.Done()
 		}(url)
 	}
 	wg.Wait()
 }
 
+var mutex = &sync.Mutex{}
+
 /* Checks whether a short link exists else create it */
 func CreateShortLink(c *gin.Context) {
-	/* Connecting to Database */
-	db, err := gorm.Open("mysql", databaseSource)
-	defer db.Close()
-	if err != nil {
-		println(err)
-		return
-	}
-
+	fmt.Println("here 2", DB)
 	url := c.PostForm("url")
 	hash := generateHash(url)
 
@@ -138,7 +135,7 @@ func CreateShortLink(c *gin.Context) {
 	message := "Successfully Generated"
 
 	/* Check whether the url already has a short link */
-	shortLink, alreadyExist := getElseCreateShortLink(db, hash, url)
+	shortLink, alreadyExist := getElseCreateShortLink(hash, url)
 	if alreadyExist {
 		message = "The Short Link Already Exist"
 	}
@@ -154,17 +151,10 @@ func CreateShortLink(c *gin.Context) {
 /* Redirect to the Main(Long) URL */
 func ShortLinkRedirect(c *gin.Context) {
 	hash := c.Params.ByName("hash")
-
-	/* Connecting to Database */
-	db, err := gorm.Open("mysql", databaseSource)
-	if err != nil {
-		println(err)
-	}
-
-	originalLink, found, hits := getLongLink(db, hash)
+	originalLink, found, hits := getLongLink(hash)
 
 	if found {
-		go increaseHits(db, hash, hits)
+		go increaseHits(hash, hits)
 		c.Redirect(http.StatusFound, "http://"+originalLink)
 	} else {
 		c.Redirect(http.StatusFound, "/")
@@ -172,23 +162,23 @@ func ShortLinkRedirect(c *gin.Context) {
 }
 
 /* To increase the count of hits a short URL receives */
-func increaseHits(db *gorm.DB, hash string, originalHits int) {
+func increaseHits(hash string, originalHits int) {
 	var link migrations.Link
-	db.Where("hash = ?", hash).First(&link)
+	DB.Where("hash = ?", hash).First(&link)
 
 	/* If there's no retrieval */
 	if len(link.URL) == 0 {
 		return
 	}
 	link.Hits = originalHits + 1
-	db.Save(&link)
-	db.Close()
+	DB.Save(&link)
+	DB.Close()
 }
 
 /* Retrieve the Long URL by matching the Hash */
-func getLongLink(db *gorm.DB, hash string) (string, bool, int) {
+func getLongLink(hash string) (string, bool, int) {
 	var link migrations.Link
-	db.Where("hash = ?", hash).First(&link)
+	DB.Where("hash = ?", hash).First(&link)
 	/* IF there's no retrieval */
 	if len(link.URL) == 0 {
 		return "", false, 0
@@ -205,12 +195,14 @@ func generateHash(link string) string {
 }
 
 /* Get the shirt link of the by searching in DB using hash as key */
-func getElseCreateShortLink(db *gorm.DB, hash string, url string) (string, bool) {
+func getElseCreateShortLink(hash string, url string) (string, bool) {
 	shortLink := siteDomain + "/h/" + hash
-	_, alreadyExist, _ := getLongLink(db, hash)
+	_, alreadyExist, _ := getLongLink(hash)
 	if alreadyExist {
 		return shortLink, true
 	}
-	db.Create(&migrations.Link{Hash:hash, URL:url, Hits: 0})
+	mutex.Lock()
+	DB.Create(&migrations.Link{Hash:hash, URL:url, Hits: 0})
+	mutex.Unlock()
 	return shortLink, false
 }
